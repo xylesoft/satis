@@ -19,7 +19,7 @@ use Composer\Json\JsonFile;
 use Composer\Json\JsonValidationException;
 use Composer\Satis\Builder\ArchiveBuilder;
 use Composer\Satis\Builder\PackagesBuilder;
-use Composer\Satis\Builder\WebBuilder;
+//use Composer\Satis\Builder\DezemWebBuilder as WebBuilder;
 use Composer\Satis\PackageSelection\PackageSelection;
 use Composer\Util\RemoteFilesystem;
 use JsonSchema\Validator;
@@ -47,6 +47,7 @@ class BuildCommand extends BaseCommand
                 new InputOption('repository-url', null, InputOption::VALUE_OPTIONAL, 'Only update the repository at given url', null),
                 new InputOption('no-html-output', null, InputOption::VALUE_NONE, 'Turn off HTML view'),
                 new InputOption('skip-errors', null, InputOption::VALUE_NONE, 'Skip Download or Archive errors'),
+                new InputOption('html-builder', null, InputOption::VALUE_REQUIRED, 'Specify a specific builder class to generate the HTML view (default: WebBuilder)'),
             ))
             ->setHelp(<<<EOT
 The <info>build</info> command reads the given json file
@@ -161,6 +162,19 @@ EOT
             throw new \InvalidArgumentException('The output dir must be specified as second argument or be configured inside '.$input->getArgument('file'));
         }
 
+
+        if ($htmlView = !$input->getOption('no-html-output')) {
+            $htmlView = !isset($config['output-html']) || $config['output-html'];
+        }
+
+        if ($htmlView) {
+
+            $htmlBuilder = '\\Composer\\Satis\\Builder\\' . ($input->getOption('html-builder') ?: 'WebBuilder');
+            if (!class_exists($htmlBuilder)) {
+                throw new \InvalidArgumentException('html-builder class does not exist: ' . $htmlBuilder);
+            }
+        }
+
         $composer = $this->getApplication()->getComposer(true, $config);
         $packageSelection = new PackageSelection($output, $outputDir, $config, $skipErrors);
 
@@ -189,12 +203,9 @@ EOT
         $packagesBuilder = new PackagesBuilder($output, $outputDir, $config, $skipErrors);
         $packagesBuilder->dump($packages);
 
-        if ($htmlView = !$input->getOption('no-html-output')) {
-            $htmlView = !isset($config['output-html']) || $config['output-html'];
-        }
-
         if ($htmlView) {
-            $web = new WebBuilder($output, $outputDir, $config, $skipErrors);
+
+            $web = new $htmlBuilder($output, $outputDir, $config, $skipErrors);
             $web->setRootPackage($composer->getPackage());
             $web->dump($packages);
         }
